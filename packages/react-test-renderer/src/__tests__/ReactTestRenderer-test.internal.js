@@ -960,11 +960,8 @@ describe('ReactTestRenderer', () => {
   });
 
   it('supports portal.', () => {
-    // We need to provide an object with the correct
-    // APIs to be used by both `react-test-renderer` and
-    // `React.createPortal()`.
-    const ELEMENT_NODE = 1;
-    const container = { children: [], nodeType: ELEMENT_NODE };
+    // give the implementation of a minimal api.
+    const container = ReactTestRenderer.document.createElement("div");
 
     const Portal = () => (
       ReactDOM.createPortal(
@@ -973,14 +970,14 @@ describe('ReactTestRenderer', () => {
       )
     );
 
-    ReactTestRenderer.create(
+    const component = ReactTestRenderer.create(
       <div>
         <Portal />
       </div>
     );
 
     expect(ReactTestRenderer.toJSON(container.children[0])).toEqual(
-      { type: 'div', props: {}, children: ['hello'] }
+      { type: 'div', children: [] }
     );
   });
 });

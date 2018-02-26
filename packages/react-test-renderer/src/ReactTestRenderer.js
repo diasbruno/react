@@ -44,6 +44,9 @@ type Container = {|
   children: Array<Instance | TextInstance>,
   createNodeMock: Function,
   tag: 'CONTAINER',
+  appendChild: Function,
+  removeChild: Function,
+  insertBefore: Function,
 |};
 
 type Props = Object;
@@ -53,6 +56,9 @@ type Instance = {|
   children: Array<Instance | TextInstance>,
   rootContainerInstance: Container,
   tag: 'INSTANCE',
+  appendChild: Function,
+  removeChild: Function,
+  insertBefore: Function,
 |};
 
 type TextInstance = {|
@@ -139,13 +145,13 @@ const TestRenderer = ReactFiberReconciler({
     hostContext: Object,
     internalInstanceHandle: Object,
   ): Instance {
-    return {
+    return DocumentApi.createElementForInstance(
       type,
       props,
-      children: [],
       rootContainerInstance,
-      tag: 'INSTANCE',
-    };
+      hostContext,
+      internalInstanceHandle,
+    );
   },
 
   appendInitialChild(
@@ -247,12 +253,44 @@ const TestRenderer = ReactFiberReconciler({
       // noop
     },
 
-    appendChild: appendChild,
-    appendChildToContainer: appendChild,
-    insertBefore: insertBefore,
-    insertInContainerBefore: insertBefore,
-    removeChild: removeChild,
-    removeChildFromContainer: removeChild,
+    // now, we will forward to the actual implementation
+    // of these functions.
+    appendChild: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.appendChild(child);
+    },
+    appendChildToContainer: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.appendChild(child);
+    },
+    insertBefore: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.insertBefore(child);
+    },
+    insertInContainerBefore: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.insertBefore(child);
+    },
+    removeChild: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.removeChild(child);
+    },
+    removeChildFromContainer: function(
+      parentInstance : Instance | Container,
+      child : Instance | Container | TextInstance
+    ) {
+      parentInstance.removeChild(child);
+    },
   },
 });
 
@@ -263,6 +301,7 @@ const defaultTestOptions = {
 };
 
 function toJSON(inst: Instance | TextInstance): ReactTestRendererNode {
+  //console.log(inst);
   switch (inst.tag) {
     case 'TEXT':
       return inst.text;
@@ -597,6 +636,44 @@ function propsMatch(props: Object, filter: Object): boolean {
   return true;
 }
 
+class DocumentApi {
+  constructor(container: Container) {
+    this.body = container;
+  }
+
+  static createElementForInstance(
+    type: string,
+    props: Props,
+    rootContainerInstance: Container,
+    hostContext: Object,
+    internalInstanceHandle: Object,
+  ): Instance {
+    return {
+      nodeType: 1,
+      type,
+      props,
+      children: [],
+      rootContainerInstance,
+      tag: 'INSTANCE',
+      appendChild: function(node) {
+        appendChild(this, node);
+      },
+      removeChild: function(node) {
+        removeChild(this, node);
+      },
+      insertBefore: function(node, beforeChild) {
+        insertBefore(this, node, beforeChild);
+      }
+    };
+  }
+
+  createElement(nodeName: String): Instance {
+    return DocumentApi.createElementForInstance(
+      nodeName, {}, [], null,
+    );
+  }
+};
+
 const ReactTestRendererFiber = {
   create(element: React$Element<any>, options: TestRendererOptions) {
     let createNodeMock = defaultTestOptions.createNodeMock;
@@ -607,7 +684,25 @@ const ReactTestRendererFiber = {
       children: [],
       createNodeMock,
       tag: 'CONTAINER',
+      appendChild: function(node) {
+        appendChild(this, node);
+      },
+      removeChild: function(node) {
+        removeChild(this, node);
+      },
+      insertBefore: function(node, beforeChild) {
+        insertBefore(this, node, beforeChild);
+      },
+      toJSON: function() {
+        return this.children.map(toJSON);
+      }
     };
+
+    // every time we create a new instance of the renderer
+    // we generate a new document.
+    this.document = new DocumentApi(container);
+    var document = this.document;
+
     let root: FiberRoot | null = TestRenderer.createContainer(
       container,
       false,
